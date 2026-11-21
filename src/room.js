@@ -8,16 +8,16 @@
 import { generateWorld, WORLD_W, pendulumPos, birdX } from "./world.js";
 
 // ---- Física (mesmos valores do jogo original, 60 Hz) ---------------
-const GRAVITY = 0.55; // "puxa pra baixo"
+const GRAVITY = 0.35; // "puxa pra baixo" (reduzida: salto mais lento/flutuante)
 const MOVE_ACCEL = 0.9;
 const AIR_ACCEL = 0.6;
 const MAX_SPEED = 4.3;
 const FRICTION = 0.78;
-const JUMP_VEL = -13.4;
-const ROPE_LEN = 96; // folga da cordinha
+const JUMP_VEL = -10.7; // impulso reduzido p/ manter ~a mesma altura com salto mais lento
+const ROPE_LEN = 120; // folga da cordinha (+25%: separa mais os jogadores)
 const ROPE_K = 0.06; // rigidez da mola quando esticada
 const ROPE_DAMP = 0.12; // amortecimento
-const MAX_FALL = 16;
+const MAX_FALL = 12.8; // queda máxima proporcional ao salto mais lento
 const KNOCK_VX = 7; // empurrão horizontal ao tocar um perigo (pêndulo/pássaro)
 const KNOCK_VY = -6; // "tranco" para cima ao ser empurrado (tira do chão)
 
