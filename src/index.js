@@ -5,6 +5,7 @@
    ============================================================ */
 
 import http from "node:http";
+import { performance } from "node:perf_hooks";
 import { WebSocketServer } from "ws";
 import { initDb, reserveCode, releaseCode, usingDatabase } from "./db.js";
 import { Room, MAX_PLAYERS } from "./room.js";
@@ -22,6 +23,27 @@ let nextId = 1;
 
 function roomExists(code) {
   return rooms.has(code);
+}
+
+// --- Telemetria do servidor (ajuda o cliente a diagnosticar lentidão) ----
+// Quanto tempo o passo de simulação levou e quanto o event loop atrasou
+// entre passos. Se `simGap` fica alto, o processo Node está saturado
+// (muitas salas, GC, ou throttling do plano grátis) — a causa mais comum
+// de "travar" no servidor, já que todas as salas compartilham este loop.
+let simMs = 0; // tempo gasto no último passo (ms)
+let simGap = 0; // atraso do event loop além do intervalo esperado (ms)
+let simMsMax = 0; // pico do tempo de passo desde o último pong (ms)
+
+function totalPlayers() {
+  let n = 0;
+  for (const room of rooms.values()) n += room.count;
+  return n;
+}
+
+function playingRooms() {
+  let n = 0;
+  for (const room of rooms.values()) if (room.phase === "playing") n++;
+  return n;
 }
 
 function send(ws, obj) {
@@ -203,7 +225,20 @@ async function handleMessage(ws, msg) {
       break;
 
     case "ping":
-      send(ws, { t: "pong" });
+      // Ecoa o timestamp do cliente (p/ ele medir o RTT) e anexa a carga
+      // atual do servidor, para o HUD de diagnóstico mostrar onde trava.
+      send(ws, {
+        t: "pong",
+        ts: msg.ts,
+        rooms: rooms.size,
+        playing: playingRooms(),
+        players: totalPlayers(),
+        simMs: Math.round(simMs * 100) / 100,
+        simGap: Math.round(simGap * 100) / 100,
+        simMsMax: Math.round(simMsMax * 100) / 100,
+        rss: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      });
+      simMsMax = 0; // zera o pico após reportá-lo (janela = intervalo de ping)
       break;
   }
 }
@@ -224,8 +259,16 @@ async function handleLeave(ws) {
 }
 
 // --- Loop global de simulação -------------------------------------
+const SIM_INTERVAL = 1000 / SIM_HZ;
 let simCounter = 0;
+let lastSimAt = performance.now();
 setInterval(() => {
+  const now = performance.now();
+  // atraso do event loop: quanto o disparo passou do intervalo ideal.
+  simGap = now - lastSimAt - SIM_INTERVAL;
+  if (simGap < 0) simGap = 0;
+  lastSimAt = now;
+
   simCounter++;
   for (const [code, room] of rooms) {
     if (room.phase === "playing") {
@@ -238,7 +281,10 @@ setInterval(() => {
       }
     }
   }
-}, 1000 / SIM_HZ);
+
+  simMs = performance.now() - now; // tempo de CPU gasto neste passo
+  if (simMs > simMsMax) simMsMax = simMs; // guarda o pico até o próximo pong
+}, SIM_INTERVAL);
 
 // Ping periódico: derruba conexões mortas (libera salas órfãs).
 setInterval(() => {
