@@ -1,0 +1,29 @@
+# Faz deploy deste repositório (servidor WebSocket) no Fly.io
+# a cada push na branch main.
+#
+# Secret necessário (no repo subir-juntos-server > Settings >
+# Secrets and variables > Actions > New repository secret):
+#   FLY_API_TOKEN - gerado com:  fly tokens create deploy -a estudio-elemental-subir-presos
+#
+# A config do app (nome, região gru, Dockerfile) está em fly.toml.
+name: Deploy (Fly.io)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency: deploy-group # evita dois deploys simultâneos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Publicar no Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,37 @@
+# fly.toml — Deploy do servidor Grudados no Fly.io.
+#
+# Por que Fly (e não Render): o Render não tem região na América do Sul,
+# então jogadores no BR pagam ~150-250 ms de RTT a cada input. Em "gru"
+# (São Paulo) o RTT cai para a casa das dezenas de ms, melhorando todo o
+# jogo (física autoritativa + como você vê os colegas).
+#
+# Passos (uma vez):
+#   fly apps create estudio-elemental-subir-presos
+#   fly secrets set DATABASE_URL="postgres://...neon..."   # banco dos códigos
+#   fly deploy
+# Depois, edite PRODUCTION_WS em client/js/config.js com a URL wss:// do app.
+
+app = "estudio-elemental-subir-presos"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Mantém 1 máquina sempre de pé: jogo em tempo real não tolera cold start.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
